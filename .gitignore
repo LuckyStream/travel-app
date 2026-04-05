@@ -20,3 +20,6 @@ npm-debug.log*
 
 # Vercel
 .vercel
+
+# Accidental local exports (not part of this app)
+requirements.txt
