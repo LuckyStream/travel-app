@@ -4,22 +4,26 @@ import {
   fetchVerifiedPlacesForDestination,
   formatVerifiedPlacesForPrompt,
   GOOGLE_NEARBY_MAX_RADIUS_METERS,
-  useRegionalSearchRadius,
+  interestsPreferRegionalSearch,
 } from "@/lib/google-places";
 import { normalizeItinerary } from "@/lib/itinerary-schema";
 import { parseJsonLoose } from "@/lib/json-utils";
 import { ollamaChat } from "@/lib/ollama";
-import type { ItineraryItem, TripPreferences } from "@/lib/types";
+import { clampTripDays, type ItineraryItem, type TripPreferences } from "@/lib/types";
 import { fetchDestinationSummary } from "@/lib/wikipedia";
 
-const PLAN_SYSTEM = `You are an expert travel planner. Output **only valid JSON** — no markdown, no code fences, no explanation.
+function buildPlanSystem(dayCount: number): string {
+  const plural = dayCount === 1 ? "" : "s";
+  const dayRange =
+    dayCount === 1 ? "1" : dayCount === 2 ? "1 or 2" : `1 through ${dayCount}`;
+  return `You are an expert travel planner. Output **only valid JSON** — no markdown, no code fences, no explanation.
 
-Return exactly **3** day objects. You may use EITHER:
-A) A top-level JSON **array** of 3 objects, OR
+Return exactly **${dayCount}** day object${plural}. You may use EITHER:
+A) A top-level JSON **array** of ${dayCount} object${plural}, OR
 B) A JSON object with a key "days" whose value is that array.
 
 Each day object must have:
-- "day": integer 1, 2, or 3
+- "day": integer ${dayRange}
 - These **exact snake_case keys** (each value is an object):
   - "morning_destination": sightseeing / attraction / park (not a meal).
   - "lunch": **restaurant or café**.
@@ -38,9 +42,11 @@ Each slot object MUST have:
 **Choose from the following verified places only.** Do **not** invent new locations, coordinates, ratings, or review counts. Use only entries supplied under "Verified places" in the user message. If nothing fits a slot perfectly, pick the closest real option from the same list.
 
 **Group activities geographically by day.** Each day's morning visit, lunch, afternoon visit, dinner, and optional evening stop should be **physically close** to each other to minimize travel time. **Do not** mix far-apart parts of the region on the same day.`;
+}
 
 function buildUserPrompt(
   prefs: TripPreferences,
+  dayCount: number,
   wiki: string | null,
   verifiedPlacesText: string,
   regionalNatureHint: boolean
@@ -50,8 +56,10 @@ function buildUserPrompt(
   const regionalBlock = regionalNatureHint
     ? `\nRegional / outdoor coverage: The user selected **nature, adventure, and/or relaxation**. For those interests, include **nearby natural attractions** that could reasonably be reached within about **one hour's driving time** from the city — not only dense city-center spots. Verified place searches for those themes used up to **~${kmApprox} km** from the destination center (Google Places API limit).\n`
     : `\nUrban coverage: Shopping, dining, nightlife, and most history venues use a **~15 km** search radius from the destination center.\n`;
+  const dayLabel = dayCount === 1 ? "1 day" : `${dayCount} days`;
+  const daysWord = dayCount === 1 ? "one logical day" : `${dayCount} logical days`;
 
-  return `Plan a 3-day trip.
+  return `Plan a ${dayLabel} trip.
 
 Destination: ${prefs.destination}
 Budget: ${prefs.budget}
@@ -63,21 +71,22 @@ ${regionalBlock}
 ### Verified places (Google Places — select and arrange ONLY from this list; copy exact names, lat, lng, rating, and reviewCount)
 ${verifiedPlacesText}
 
-Respect budget and priorities. Build three logical days with geographically clustered stops per day.`;
+Respect budget and priorities. Build ${daysWord} with geographically clustered stops per day.`;
 }
 
 async function generatePlanJson(
   prefs: TripPreferences,
+  dayCount: number,
   wiki: string | null,
   verifiedPlacesText: string,
   regionalNatureHint: boolean
 ): Promise<string> {
   return ollamaChat(
     [
-      { role: "system", content: PLAN_SYSTEM },
+      { role: "system", content: buildPlanSystem(dayCount) },
       {
         role: "user",
-        content: buildUserPrompt(prefs, wiki, verifiedPlacesText, regionalNatureHint),
+        content: buildUserPrompt(prefs, dayCount, wiki, verifiedPlacesText, regionalNatureHint),
       },
     ],
     { format: "json", temperature: 0.45 }
@@ -90,6 +99,9 @@ export async function POST(req: Request) {
     if (!prefs?.destination?.trim()) {
       return NextResponse.json({ error: "destination required" }, { status: 400 });
     }
+
+    const dayCount = clampTripDays(prefs.tripDays);
+    const prefsWithDays: TripPreferences = { ...prefs, tripDays: dayCount };
 
     const dest = prefs.destination.trim();
     const placesKey = process.env.GOOGLE_PLACES_API_KEY?.trim() ?? "";
@@ -112,16 +124,28 @@ export async function POST(req: Request) {
         "(No GOOGLE_PLACES_API_KEY — no verified list. Prefer widely known real venues near the destination with realistic coordinates, ratings, and review counts if you must infer.)";
     }
 
-    const regionalNatureHint = useRegionalSearchRadius(prefs.interests);
+    const regionalNatureHint = interestsPreferRegionalSearch(prefs.interests);
     const wiki = await fetchDestinationSummary(dest);
 
     let parsed: unknown;
     try {
-      const rawJson = await generatePlanJson(prefs, wiki, verifiedPlacesText, regionalNatureHint);
+      const rawJson = await generatePlanJson(
+        prefsWithDays,
+        dayCount,
+        wiki,
+        verifiedPlacesText,
+        regionalNatureHint
+      );
       parsed = parseJsonLoose(rawJson);
     } catch {
       try {
-        const rawJson = await generatePlanJson(prefs, wiki, verifiedPlacesText, regionalNatureHint);
+        const rawJson = await generatePlanJson(
+          prefsWithDays,
+          dayCount,
+          wiki,
+          verifiedPlacesText,
+          regionalNatureHint
+        );
         parsed = parseJsonLoose(rawJson);
       } catch {
         return NextResponse.json(
@@ -153,7 +177,7 @@ export async function POST(req: Request) {
       lng: forGeo[i].lng,
     }));
 
-    return NextResponse.json({ items, preferences: prefs });
+    return NextResponse.json({ items, preferences: prefsWithDays });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Plan generation failed";
     return NextResponse.json({ error: msg }, { status: 502 });

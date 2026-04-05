@@ -2,17 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage } from "@/lib/types";
+import { DEFAULT_TRIP_DAYS, type ChatMessage } from "@/lib/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Carried to preferences when the user continues from chat. */
+  tripDays?: number;
 };
 
 const INTRO_TEXT =
   "Not sure where to go? Tell me in a sentence or two what kind of trip you want (pace, climate, budget feel), and I will narrow it down.";
 
-export function DestinationChat({ open, onClose }: Props) {
+export function DestinationChat({ open, onClose, tripDays = DEFAULT_TRIP_DAYS }: Props) {
   const router = useRouter();
   /** Transcript for API: user/assistant only (no static intro). */
   const [thread, setThread] = useState<ChatMessage[]>([]);
@@ -80,7 +82,9 @@ export function DestinationChat({ open, onClose }: Props) {
 
   const onContinue = () => {
     if (!lastConfirmed) return;
-    router.push(`/preferences?destination=${encodeURIComponent(lastConfirmed)}`);
+    router.push(
+      `/preferences?destination=${encodeURIComponent(lastConfirmed)}&days=${tripDays}`
+    );
     onClose();
   };
 

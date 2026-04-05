@@ -62,11 +62,22 @@ export type ItineraryItem = {
 
 export type TripPreferences = {
   destination: string;
+  /** Number of days to plan (1–14). Omitted in older saved trips → treat as 3. */
+  tripDays?: number;
   budget: Budget;
   interests: InterestTag[];
   dining: DiningTag[];
   priorityOrder: PriorityKey[];
 };
+
+export const DEFAULT_TRIP_DAYS = 3;
+export const MIN_TRIP_DAYS = 1;
+export const MAX_TRIP_DAYS = 14;
+
+export function clampTripDays(n: unknown): number {
+  const x = typeof n === "number" && Number.isFinite(n) ? Math.floor(n) : DEFAULT_TRIP_DAYS;
+  return Math.min(MAX_TRIP_DAYS, Math.max(MIN_TRIP_DAYS, x));
+}
 
 export type ChatMessage = {
   role: "user" | "assistant";

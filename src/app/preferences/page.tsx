@@ -6,7 +6,15 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { PriorityRanker } from "@/components/PriorityRanker";
 import { SiteHeader } from "@/components/SiteHeader";
 import { saveTrip } from "@/lib/session-trip";
-import type { Budget, DiningTag, InterestTag, ItineraryItem, PriorityKey, TripPreferences } from "@/lib/types";
+import {
+  clampTripDays,
+  type Budget,
+  type DiningTag,
+  type InterestTag,
+  type ItineraryItem,
+  type PriorityKey,
+  type TripPreferences,
+} from "@/lib/types";
 
 const INTERESTS: InterestTag[] = [
   "nature",
@@ -47,6 +55,10 @@ function PreferencesForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const destinationParam = searchParams.get("destination")?.trim() ?? "";
+  const daysParam = searchParams.get("days");
+  const tripDays = clampTripDays(
+    daysParam != null && daysParam !== "" ? Number.parseInt(daysParam, 10) : undefined
+  );
 
   const [budget, setBudget] = useState<Budget>("medium");
   const [interests, setInterests] = useState<InterestTag[]>([]);
@@ -66,12 +78,13 @@ function PreferencesForm() {
   const prefs = useMemo<TripPreferences>(
     () => ({
       destination,
+      tripDays,
       budget,
       interests,
       dining,
       priorityOrder,
     }),
-    [destination, budget, interests, dining, priorityOrder]
+    [destination, tripDays, budget, interests, dining, priorityOrder]
   );
 
   const toggleInterest = (t: InterestTag) => {
@@ -155,6 +168,10 @@ function PreferencesForm() {
         {destination ? (
           <>
             Planning for <span className="font-medium text-ink">{destination}</span>
+            {" — "}
+            <span className="font-medium text-ink">
+              {tripDays} {tripDays === 1 ? "day" : "days"}
+            </span>
           </>
         ) : (
           <>Pick a destination first.</>

@@ -41,7 +41,7 @@ type NearbyApiResponse = {
 };
 
 /** True when interests justify regional (wider) search around the destination. */
-export function useRegionalSearchRadius(interests: InterestTag[]): boolean {
+export function interestsPreferRegionalSearch(interests: InterestTag[]): boolean {
   return interests.some((t) => t === "nature" || t === "adventure" || t === "relaxation");
 }
 
@@ -58,7 +58,7 @@ function buildNearbyRequests(
   interests: InterestTag[],
   dining: DiningTag[]
 ): NearbySearchParams[] {
-  const regional = useRegionalSearchRadius(interests);
+  const regional = interestsPreferRegionalSearch(interests);
   const rRegional = GOOGLE_NEARBY_MAX_RADIUS_METERS;
   const rUrban = R_URBAN_METERS;
   const seen = new Set<string>();

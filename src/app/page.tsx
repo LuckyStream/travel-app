@@ -4,17 +4,24 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DestinationChat } from "@/components/DestinationChat";
 import { SiteHeader } from "@/components/SiteHeader";
+import { DEFAULT_TRIP_DAYS, MAX_TRIP_DAYS, MIN_TRIP_DAYS } from "@/lib/types";
 
 export default function HomePage() {
   const router = useRouter();
   const [destination, setDestination] = useState("");
+  const [tripDays, setTripDays] = useState(DEFAULT_TRIP_DAYS);
   const [chatOpen, setChatOpen] = useState(false);
 
   const goPreferences = () => {
     const d = destination.trim();
     if (!d) return;
-    router.push(`/preferences?destination=${encodeURIComponent(d)}`);
+    router.push(
+      `/preferences?destination=${encodeURIComponent(d)}&days=${tripDays}`
+    );
   };
+
+  const setDays = (n: number) =>
+    setTripDays(Math.min(MAX_TRIP_DAYS, Math.max(MIN_TRIP_DAYS, n)));
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#1e293b_0%,_#0a0e12_55%)]">
@@ -54,6 +61,39 @@ export default function HomePage() {
           </button>
         </div>
 
+        <div>
+          <p className="text-xs font-medium text-ink-muted">Trip length</p>
+          <p className="mt-1 text-sm text-ink-muted">How many days are you traveling?</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="flex items-center rounded-xl border border-surface-muted bg-surface-raised">
+              <button
+                type="button"
+                aria-label="Fewer days"
+                onClick={() => setDays(tripDays - 1)}
+                disabled={tripDays <= MIN_TRIP_DAYS}
+                className="rounded-l-xl px-4 py-2.5 text-lg font-medium text-ink hover:bg-surface-muted disabled:opacity-35"
+              >
+                −
+              </button>
+              <span className="min-w-[3rem] text-center font-display text-lg font-semibold tabular-nums text-ink">
+                {tripDays}
+              </span>
+              <button
+                type="button"
+                aria-label="More days"
+                onClick={() => setDays(tripDays + 1)}
+                disabled={tripDays >= MAX_TRIP_DAYS}
+                className="rounded-r-xl px-4 py-2.5 text-lg font-medium text-ink hover:bg-surface-muted disabled:opacity-35"
+              >
+                +
+              </button>
+            </div>
+            <span className="text-sm text-ink-muted">
+              {tripDays === 1 ? "day" : "days"} ({MIN_TRIP_DAYS}–{MAX_TRIP_DAYS})
+            </span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
           <div className="h-px flex-1 bg-surface-muted" />
           <span className="text-xs text-ink-muted">or</span>
@@ -82,7 +122,11 @@ export default function HomePage() {
         </p>
       </main>
 
-      <DestinationChat open={chatOpen} onClose={() => setChatOpen(false)} />
+      <DestinationChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        tripDays={tripDays}
+      />
     </div>
   );
 }
