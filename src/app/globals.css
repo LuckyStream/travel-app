@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0e12;
+  --foreground: #e8eef5;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  min-height: 100vh;
+}
+
+/* Mapbox popup defaults clash with dark theme — keep controls readable */
+.mapboxgl-ctrl-logo {
+  filter: brightness(0.9);
+}
